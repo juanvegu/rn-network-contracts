@@ -4,7 +4,12 @@ import Foundation
 /// Nuevas capacidades se agregan como protocolos opcionales
 /// que extienden este núcleo.
 public protocol NetworkProvider {
-    func request(url: String, headers: [String: String]) async throws -> Data
+    func request(
+        url: String,
+        method: String,
+        headers: [String: String],
+        body: [String: Any]?
+    ) async throws -> Data
 }
 
 /// Extensión opcional para países que soporten cancelación.

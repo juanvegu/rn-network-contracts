@@ -6,7 +6,12 @@ package com.scotia.rnnetwork.contracts
  * que extienden este núcleo.
  */
 interface NetworkProvider {
-    suspend fun request(url: String, headers: Map<String, String>): ByteArray
+    suspend fun request(
+        url: String,
+        method: String,
+        headers: Map<String, String>,
+        body: Map<String, Any?>?
+    ): ByteArray
 }
 
 /**
