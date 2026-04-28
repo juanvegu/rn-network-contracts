@@ -1,8 +1,8 @@
 import Foundation
 
-/// Contrato núcleo — nunca debe cambiar entre versiones.
-/// Nuevas capacidades se agregan como protocolos opcionales
-/// que extienden este núcleo.
+/// Core contract — must never change between versions.
+/// New capabilities are added as optional protocols
+/// that extend this core.
 public protocol NetworkProvider {
     func request(
         url: String,
@@ -12,9 +12,9 @@ public protocol NetworkProvider {
     ) async throws -> Data
 }
 
-/// Extensión opcional para países que soporten cancelación.
-/// El módulo RN detecta esta capacidad en runtime con degradación
-/// elegante si el país no la implementó.
+/// Optional extension for countries that support cancellation.
+/// The RN module detects this capability at runtime with graceful
+/// degradation if the country has not implemented it.
 public protocol CancellableNetworkProvider: NetworkProvider {
     func cancel(requestId: String)
 }

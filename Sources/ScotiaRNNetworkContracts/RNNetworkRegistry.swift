@@ -1,8 +1,8 @@
 import Foundation
 
-/// Singleton compartido entre el xcframework de la App RN
-/// y la app nativa del banco.
-/// El banco debe asignar provider ANTES de inicializar React Native.
+/// Shared singleton between the RN App xcframework
+/// and the bank's native app.
+/// The bank must assign the provider BEFORE initializing React Native.
 public final class RNNetworkRegistry {
     public static var provider: NetworkProvider?
 }

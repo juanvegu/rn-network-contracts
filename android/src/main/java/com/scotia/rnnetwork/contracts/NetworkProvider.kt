@@ -1,9 +1,9 @@
 package com.scotia.rnnetwork.contracts
 
 /**
- * Contrato núcleo — nunca debe cambiar entre versiones.
- * Nuevas capacidades se agregan como interfaces opcionales
- * que extienden este núcleo.
+ * Core contract — must never change between versions.
+ * New capabilities are added as optional interfaces
+ * that extend this core.
  */
 interface NetworkProvider {
     suspend fun request(
@@ -15,9 +15,9 @@ interface NetworkProvider {
 }
 
 /**
- * Extensión opcional para países que soporten cancelación.
- * El módulo RN detecta esta capacidad en runtime con degradación
- * elegante si el país no la implementó.
+ * Optional extension for countries that support cancellation.
+ * The RN module detects this capability at runtime with graceful
+ * degradation if the country has not implemented it.
  */
 interface CancellableNetworkProvider : NetworkProvider {
     fun cancel(requestId: String)
