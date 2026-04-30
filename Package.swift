@@ -2,18 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "ScotiaRNNetworkContracts",
-    platforms: [.iOS(.v14)],
+    name: "NetworkContracts",
+    platforms: [.iOS(.v15)],
     products: [
         .library(
-            name: "ScotiaRNNetworkContracts",
-            targets: ["ScotiaRNNetworkContracts"]
+            name: "NetworkContracts",
+            targets: ["NetworkContracts"]
         )
     ],
     targets: [
         .target(
-            name: "ScotiaRNNetworkContracts",
-            path: "Sources/ScotiaRNNetworkContracts"
+            name: "NetworkContracts",
+            path: "Sources/NetworkContracts"
         )
     ]
 )

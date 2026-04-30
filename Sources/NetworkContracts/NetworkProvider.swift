@@ -1,8 +1,7 @@
 import Foundation
 
 /// Core contract — must never change between versions.
-/// New capabilities are added as optional protocols
-/// that extend this core.
+/// New capabilities are added as optional protocols that extend this core.
 public protocol NetworkProvider {
     func request(
         url: String,
