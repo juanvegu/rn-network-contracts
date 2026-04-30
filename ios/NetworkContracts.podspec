@@ -10,5 +10,5 @@ Pod::Spec.new do |s|
   s.source           = { :git => 'https://github.com/juanvegu/rn-network-contracts.git', :tag => s.version }
   s.static_framework = true
 
-  s.source_files     = 'Sources/NetworkContracts/**/*.swift'
+  s.source_files     = 'ios/Sources/NetworkContracts/**/*.swift'
 end
