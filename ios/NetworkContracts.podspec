@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'NetworkContracts'
-  s.version          = '1.0.2'
+  s.version          = '1.0.3'
   s.summary          = 'Shared network contracts for Scotia RN modules.'
   s.license          = { :type => 'Proprietary' }
   s.author           = { 'Scotiabank Chile' => '' }
@@ -14,6 +14,8 @@ Pod::Spec.new do |s|
 
   s.pod_target_xcconfig = {
     'MACH_O_TYPE' => 'mh_dylib',
-    'DEFINES_MODULE' => 'YES'
+    'DEFINES_MODULE' => 'YES',
+    'BUILD_LIBRARY_FOR_DISTRIBUTION' => 'YES',
+    'OTHER_SWIFT_FLAGS' => '$(inherited) -enable-library-evolution'
   }
 end
