@@ -1,11 +1,11 @@
 plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
+    id 'com.android.library' version '8.5.2'
+    id 'org.jetbrains.kotlin.android' version '1.9.25'
     id 'maven-publish'
 }
 
 group = 'com.github.juanvegu'
-version = '1.0.6'
+version = '1.0.7'
 
 android {
     namespace 'com.scotia.rnnetwork.contracts'
@@ -25,7 +25,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.juanvegu'
                 artifactId = 'rn-network-contracts'
-                version = '1.0.6'
+                version = '1.0.7'
             }
         }
     }

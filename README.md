@@ -98,7 +98,7 @@ Ambos lados deben referenciar la **misma versión**. Una versión en común gara
 ```kotlin
 // scotia-android-native/app/build.gradle.kts
 dependencies {
-    implementation("com.github.juanvegu:rn-network-contracts:1.0.6")
+    implementation("com.github.juanvegu:rn-network-contracts:1.0.7")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
@@ -107,7 +107,7 @@ dependencies {
 ```groovy
 // rn-network/android/build.gradle (expo-module)
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { implementation 'com.github.juanvegu:rn-network-contracts:1.0.6' }
+dependencies { implementation 'com.github.juanvegu:rn-network-contracts:1.0.7' }
 ```
 
 #### 3. Implementar un `NetworkProvider` regional (OkHttp + pinning)
