@@ -1,4 +1,7 @@
 jdk:
   - openjdk17
+before_install:
+  - wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
+  - unzip -q /tmp/gradle.zip -d /opt
 install:
-  - cd android && gradle clean build publishToMavenLocal -x test
+  - /opt/gradle-8.9/bin/gradle -p android clean build publishToMavenLocal -x test
