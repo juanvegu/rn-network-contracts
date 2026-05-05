@@ -5,12 +5,21 @@ plugins {
 }
 
 group = 'com.github.juanvegu'
-version = '1.0.7'
+version = '1.0.8'
 
 android {
     namespace 'com.scotia.rnnetwork.contracts'
     compileSdk 34
     defaultConfig { minSdk 24 }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
     publishing {
         singleVariant('release') {
             withSourcesJar()
@@ -25,7 +34,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.juanvegu'
                 artifactId = 'rn-network-contracts'
-                version = '1.0.7'
+                version = '1.0.8'
             }
         }
     }
