@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.github.juanvegu'
-version = '1.0.5'
+version = '1.0.6'
 
 android {
     namespace 'com.scotia.rnnetwork.contracts'
@@ -25,7 +25,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.juanvegu'
                 artifactId = 'rn-network-contracts'
-                version = '1.0.5'
+                version = '1.0.6'
             }
         }
     }
