@@ -15,6 +15,7 @@ import Foundation
 ///   the RN module classify by `statusCode`.
 public protocol NetworkProvider {
     func request(
+        requestId: String,
         url: String,
         method: String,
         headers: [String: String],

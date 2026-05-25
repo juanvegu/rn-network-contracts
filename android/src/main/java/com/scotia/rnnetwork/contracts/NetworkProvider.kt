@@ -18,6 +18,7 @@ package com.scotia.rnnetwork.contracts
  */
 interface NetworkProvider {
     suspend fun request(
+        requestId: String,
         url: String,
         method: String,
         headers: Map<String, String>,
