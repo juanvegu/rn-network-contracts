@@ -2,26 +2,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "NetworkContracts",
+    name: "iOSNetworkContract",
     platforms: [
         .iOS(.v15),
     ],
     products: [
         .library(
-            name: "NetworkContracts",
+            name: "iOSNetworkContract",
             type: .dynamic,
-            targets: ["NetworkContracts"]
+            targets: ["iOSNetworkContract"]
         ),
     ],
     targets: [
         .target(
-            name: "NetworkContracts",
-            path: "ios/Sources/NetworkContracts"
+            name: "iOSNetworkContract",
+            path: "ios/Sources/iOSNetworkContract"
         ),
         .testTarget(
-            name: "NetworkContractsTests",
-            dependencies: ["NetworkContracts"],
-            path: "ios/Tests/NetworkContractsTests"
+            name: "iOSNetworkContractTests",
+            dependencies: ["iOSNetworkContract"],
+            path: "ios/Tests/iOSNetworkContractTests"
         ),
     ]
 )

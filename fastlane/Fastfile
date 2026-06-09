@@ -1,0 +1,145 @@
+# Fastfile — iOSNetworkContract (iOS)
+#
+# Lanes:
+#   test             → swift build + swift test
+#   build_xcframework → genera el xcframework + checksum (sin publicar)
+#   release          → bump version (git tag), build, upload, tag, push
+#                      uso: fastlane release bump:patch|minor|major
+#
+# La versión es el git tag (no hay podspec). Package.swift queda en source mode
+# para que el build del xcframework funcione; los consumidores referencian el
+# binario publicado por URL + checksum (ver DISTRIBUTION.md generado en release).
+
+default_platform(:ios)
+
+# Raíz del repo (fastlane corre desde ./fastlane).
+REPO_ROOT = File.expand_path("..", __dir__)
+
+platform :ios do
+  desc "Compila la librería y corre los tests (SPM)"
+  lane :test do
+    sh("cd #{REPO_ROOT} && swift build")
+    sh("cd #{REPO_ROOT} && swift test")
+  end
+
+  desc "Genera iOSNetworkContract.xcframework + checksum (sin publicar)"
+  lane :build_xcframework do
+    build_and_checksum
+  end
+
+  desc "Release: bump version, build, upload, tag y push."
+  desc "Opciones: bump:(patch|minor|major) — default patch"
+  lane :release do |options|
+    bump = options[:bump] || "patch"
+
+    ensure_git_branch(branch: "main")
+    ensure_git_status_clean
+
+    version = next_version(bump)
+    UI.header("Releasing iOSNetworkContract #{version}")
+
+    # 1. Build del xcframework
+    checksum = build_and_checksum
+
+    # 2. Upload al storage (placeholder — DevOps completa el comando real)
+    artifact_url = upload_artifact(version)
+
+    # 3. Snippet de distribución (URL + checksum) para consumidores
+    write_distribution(version, artifact_url, checksum)
+
+    # 4. Commit + tag + push
+    sh("cd #{REPO_ROOT} && git add DISTRIBUTION.md CHANGELOG.md 2>/dev/null || true")
+    sh("cd #{REPO_ROOT} && git commit -m 'Release #{version}' || echo 'nada que commitear'")
+    add_git_tag(tag: version)
+    push_to_git_remote(tags: true)
+
+    UI.success("✅ iOSNetworkContract #{version} publicado")
+    UI.message("   URL:      #{artifact_url}")
+    UI.message("   checksum: #{checksum}")
+  end
+end
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+# Corre el build script y devuelve el checksum del zip.
+#
+# NOTA: usamos scripts/build-xcframework.sh y NO el plugin
+# `fastlane-plugin-create_xcframework`. Se probó (junio 2026, Xcode 26.5) y falla
+# con Swift Packages puros: (1) fuerza bitcode deprecado, (2) pipea por un xcpretty
+# con bug US-ASCII, y (3) produce un .framework SIN Modules/swiftinterface — el
+# consumidor no puede hacer `import iOSNetworkContract`. El script maneja esos
+# gotchas de SwiftPM explícitamente.
+def build_and_checksum
+  sh("cd #{REPO_ROOT} && ./scripts/build-xcframework.sh")
+  checksum = File.read(File.join(REPO_ROOT, "build", "checksum.txt")).strip
+  UI.success("xcframework listo — checksum: #{checksum}")
+  checksum
+end
+
+# Calcula la próxima versión a partir del último git tag semver.
+def next_version(bump)
+  latest = `cd #{REPO_ROOT} && git describe --tags --abbrev=0 2>/dev/null`.strip
+  latest = "0.0.0" if latest.empty?
+  major, minor, patch = latest.split(".").map(&:to_i)
+  case bump
+  when "major" then "#{major + 1}.0.0"
+  when "minor" then "#{major}.#{minor + 1}.0"
+  when "patch" then "#{major}.#{minor}.#{patch + 1}"
+  else UI.user_error!("bump inválido: #{bump} (usar patch|minor|major)")
+  end
+end
+
+# Sube el zip al storage interno. PLACEHOLDER — DevOps reemplaza el comando real.
+# Requiere env var IOSNETWORKCONTRACT_ARTIFACT_BASE_URL (la setea Jenkins).
+def upload_artifact(version)
+  base = ENV["IOSNETWORKCONTRACT_ARTIFACT_BASE_URL"]
+  if base.nil? || base.empty?
+    UI.important("⚠️  IOSNETWORKCONTRACT_ARTIFACT_BASE_URL no seteada — usando placeholder.")
+    base = "https://STORAGE-A-DEFINIR.scotiabank.cl/ios/iOSNetworkContract"
+  end
+  url = "#{base}/#{version}/iOSNetworkContract.xcframework.zip"
+  zip = File.join(REPO_ROOT, "build", "iOSNetworkContract.xcframework.zip")
+
+  # TODO (DevOps): reemplazar por el comando real de upload, por ejemplo:
+  #   sh("curl -fsSL -u $ART_USER:$ART_TOKEN -T #{zip} #{url}")
+  #   sh("jfrog rt upload #{zip} <repo>/ios/iOSNetworkContract/#{version}/")
+  UI.important("📦 [placeholder] subir #{zip}")
+  UI.important("            →  #{url}")
+
+  url
+end
+
+# Escribe DISTRIBUTION.md con el snippet que consumen la app nativa (SPM) y el
+# módulo Expo (vendored). Es la "etiqueta" de la versión publicada.
+def write_distribution(version, url, checksum)
+  content = <<~MD
+    # Distribution — iOSNetworkContract #{version}
+
+    Binario publicado: `#{url}`
+
+    ## Swift Package Manager (app nativa)
+
+    ```swift
+    .binaryTarget(
+        name: "iOSNetworkContract",
+        url: "#{url}",
+        checksum: "#{checksum}"
+    )
+    ```
+
+    ## CocoaPods / vendored (módulo Expo @scotia/rn-network)
+
+    El módulo bundlea el xcframework. Sincronizar la versión #{version} con:
+
+    ```bash
+    ./scripts/build-and-sync.sh   # o descargar el zip publicado y descomprimir en rn-network/ios/
+    ```
+
+    > IMPORTANTE: la app nativa y el módulo Expo deben usar la MISMA versión
+    > (#{version}) del xcframework para compartir un único RNNetworkRegistry.
+
+    checksum (sha256): `#{checksum}`
+  MD
+  File.write(File.join(REPO_ROOT, "DISTRIBUTION.md"), content)
+  UI.success("DISTRIBUTION.md actualizado para #{version}")
+end

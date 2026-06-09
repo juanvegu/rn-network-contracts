@@ -1,35 +1,29 @@
-# rn-network-contracts-ios
+# iOSNetworkContract (rn-network-contracts-ios)
 
-Contrato Swift que la app nativa iOS de Scotia implementa para que el módulo Expo `@scotia/rn-network` pueda enrutar sus requests HTTP a través del stack del banco (URLSession con pinning, sesión, telemetría).
+Contrato Swift que la app nativa iOS de Scotia implementa para que el módulo Expo `@scotia/rn-network` enrute sus requests HTTP a través del stack del banco (URLSession con pinning, sesión, telemetría).
 
-Repo binario, sin dependencias externas, sin importar React Native ni Expo. Se distribuye vía **Swift Package Manager** y **CocoaPods** (mismo árbol de sources).
+Repo binario, sin dependencias externas, sin importar React Native ni Expo.
 
-> **Repo hermano (Android):** [`rn-network-contracts-android`](https://bitbucket.scotiabank.com/projects/<PROJECT>/repos/rn-network-contracts-android). Ambos van siempre al mismo `MAJOR.MINOR` — cualquier cambio al contrato requiere PRs sincronizados.
+> **Repo hermano (Android):** `rn-network-contracts-android`. Ambos van al mismo `MAJOR.MINOR`.
 
 ---
 
-## Arquitectura en un diagrama
+## Distribución: source (SPM) o binario (xcframework)
 
-```
-┌──────────────────────────┐         ┌──────────────────────────────┐
-│  App nativa iOS          │         │ @scotia/rn-network (Expo)    │
-│                          │         │                              │
-│  AppNetworkProvider  ────┼─── via ─┼─►  RNNetworkBridge (JS) ─►   │
-│  (URLSession,            │ Registry│      request(url, …)         │
-│   pinning, session)      │         │                              │
-│                          │         │  RnNetworkModule (Swift)     │
-│  RNNetworkRegistry       │         │   ├─ enforces 2xx            │
-│   ├─ provider            │         │   ├─ surfaces statusCode +   │
-│   ├─ appConfig           │         │   │  headers to JS           │
-│   ├─ activeDomain        │         │   └─ emits sessionExpired    │
-│   └─ onSessionExpired    │         │                              │
-└──────────────────────────┘         └──────────────────────────────┘
+El contrato es **dual-capable**:
 
-           ────────────────── contrato: rn-network-contracts-ios ──────────────────
-                                (Swift Package + CocoaPod)
-```
+- **Source vía SPM** — el `Package.swift` compila los `.swift` directamente. Sirve para un consumidor SPM aislado.
+- **Binario vía xcframework** — un `.xcframework` precompilado, consumible por SPM (`.binaryTarget`) **y** CocoaPods (`vendored_frameworks`).
 
-La app nativa **asigna `RNNetworkRegistry.provider`** antes de inicializar React Native. Si no lo asigna, la RN cae a su `MockNetworkProvider` JS (útil cuando el host arranca en stubbed mode).
+**Usamos el binario (xcframework), no source.** No es porque SPM falle — es por una **limitación del ecosistema Expo/React Native**:
+
+- Expo Modules está atado a CocoaPods (ExpoModulesCore, autolinking, brownfield)
+- No hay soporte SPM nativo en Expo todavía (RN 0.84+ roadmap; SDK 56 experimental)
+- El plugin `cocoapods-spm` está vetado por seguridad del banco
+
+Para compartir **una sola instancia** de `RNNetworkRegistry` entre la app nativa (SPM) y el módulo Expo (CocoaPods), ambos tienen que apuntar al **mismo binario**. Source-en-ambos-lados daría dos compilaciones → dos singletons → contrato roto.
+
+**Cuándo volver a source:** cuando Expo/RN soporten SPM first-class. Hasta entonces, binario.
 
 ---
 
@@ -37,195 +31,139 @@ La app nativa **asigna `RNNetworkRegistry.provider`** antes de inicializar React
 
 | Tipo | Descripción |
 |---|---|
-| `NetworkProvider` | Protocolo que el host implementa para hacer requests. Un método (`request`) más `cancel` opcional. |
-| `NetworkResponse` | Envelope de éxito: `statusCode`, `headers`, `data`. |
-| `NetworkError` | Error tipado que el host lanza para fallas de dominio (`SESSION_EXPIRED`, `RATE_LIMITED`, etc.). |
-| `AppConfig` | Descripción inmutable de los dominios disponibles para el flujo RN (`country`, `environment`, `domains`). |
-| `DomainConfig` | Entrada `{ key, baseURL }` dentro de `AppConfig.domains`. |
-| `RNNetworkRegistry` | Singleton compartido. El host popula `provider`, `appConfig`, `activeDomain`, `onSessionExpired`. |
+| `NetworkProvider` | Protocolo que el host implementa. `request(requestId:url:method:headers:body:) async throws -> NetworkResponse` + `cancel(requestId:)` opcional |
+| `NetworkResponse` | Envelope de éxito: `statusCode`, `headers`, `data?` |
+| `NetworkError` | Error tipado del host: `code`, `retryable`, `httpStatus?`, `message?`, `info?` |
+| `AppConfig` / `DomainConfig` | Descripción inmutable de dominios disponibles |
+| `RNNetworkRegistry` | Singleton: `provider`, `appConfig`, `activeDomain`, `onSessionExpired` |
 
-### Cuándo lanzar vs cuándo retornar
+### Cuándo lanzar vs retornar
 
 | Situación | Acción del host |
 |---|---|
-| HTTP 2xx | Retornar `NetworkResponse(statusCode: 200, headers: …, data: bytes)` |
-| HTTP 204 | Retornar `NetworkResponse(statusCode: 204, headers: …, data: nil)` |
-| HTTP non-2xx | **NO clasificar** — retornar la response tal cual; el módulo RN se encarga |
-| Falla de dominio (sesión expirada, biometría, etc.) | `throw NetworkError(code: "SESSION_EXPIRED", …)` |
-| Timeout / SSL / conectividad | Dejar propagar el `URLError` — el mapper del módulo RN lo traduce |
-| Task cancelada | Dejar propagar `CancellationError` |
+| HTTP 2xx | `NetworkResponse(statusCode: 200, headers:, data: bytes)` |
+| HTTP 204 | `NetworkResponse(statusCode: 204, data: nil)` |
+| HTTP non-2xx | **NO clasificar** — retornar la response; el módulo RN clasifica |
+| Falla de dominio (sesión, biometría) | `throw NetworkError(code: "SESSION_EXPIRED", …)` |
+| Timeout / SSL / connectivity / cancel | Dejar propagar `URLError` / `CancellationError` |
 
 ---
 
-## Códigos de error estándar
+## Consumir el xcframework
 
-El módulo RN garantiza que estos códigos lleguen al JS. El host puede definir códigos propios (prefijo recomendado: `SCOTIA_KYC_PENDING`, `SCOTIA_BIOMETRIC_REQUIRED`, …).
-
-| Código | Origen | `retryable` | Notas |
-|---|---|---|---|
-| `SSL_PINNING_FAILED` | mapper | false | Cert mismatch / chain falla |
-| `TIMEOUT` | mapper / cliente JS | true | Servidor no respondió |
-| `NO_CONNECTIVITY` | mapper | true | Sin red, DNS falla |
-| `HTTP_CLIENT_ERROR` | módulo (4xx) | false | Asignado automático |
-| `HTTP_SERVER_ERROR` | módulo (5xx) | true | Asignado automático |
-| `INVALID_RESPONSE_BODY` | módulo | false | 2xx con body no JSON |
-| `CANCELLED` | mapper | false | Task cancelado |
-| `SESSION_EXPIRED` | host | false | Usuario vuelve, sesión ya no válida |
-| `SESSION_UNAUTHORIZED` | host | false | 401 que no es expiración |
-| `PROVIDER_NOT_SET` | módulo | false | Sin provider y sin fallback JS |
-| `UNKNOWN` | mapper | false | Error no mapeado |
-
----
-
-## Instalación
-
-### Swift Package Manager
+### App nativa (SPM)
 
 ```swift
-// Package.swift consumer
-.package(url: "https://bitbucket.scotiabank.com/scm/<project>/rn-network-contracts-ios.git", from: "1.0.0")
+// Producción — Package.swift, snippet del DISTRIBUTION.md publicado
+.binaryTarget(
+    name: "iOSNetworkContract",
+    url: "https://artifactory.scotiabank.cl/ios/iOSNetworkContract/1.1.0/iOSNetworkContract.xcframework.zip",
+    checksum: "<sha256>"
+)
+
+// Dev local — path al build local
+.binaryTarget(name: "iOSNetworkContract", path: "../rn-network-contracts/build/iOSNetworkContract.xcframework")
 ```
 
-O desde Xcode → File → Add Package Dependencies → URL del repo.
+### Módulo Expo (CocoaPods, vendored)
 
-### CocoaPods
-
-```ruby
-# Podfile consumer
-pod 'NetworkContracts', '~> 1.0.0', :source => 'https://bitbucket.scotiabank.com/scm/<project>/scotia-specs.git'
-```
-
-> **Por qué ambos:** Expo Modules consume vía CocoaPods. La app nativa de Scotia migrando a SPM lo consume vía SPM. Ambos viven en el mismo repo y resuelven a los mismos `Sources/`.
+El módulo `@scotia/rn-network` bundlea el xcframework. Ver su podspec (`vendored_frameworks` + `user_target_xcconfig`).
 
 ---
 
-## Implementando el contrato
+## Implementar el provider
 
 ```swift
-import NetworkContracts
+import iOSNetworkContract
 import Foundation
 
 final class AppNetworkProvider: NetworkProvider {
     private let session: URLSession
-
     init(session: URLSession = .shared) { self.session = session }
 
     func request(
-        requestId: String,
-        url: String,
-        method: String,
-        headers: [String: String],
-        body: [String: Any]?
+        requestId: String, url: String, method: String,
+        headers: [String: String], body: [String: Any]?
     ) async throws -> NetworkResponse {
-        guard let parsed = URL(string: url) else {
-            throw NetworkError(code: "UNKNOWN", retryable: false)
-        }
-
-        var req = URLRequest(url: parsed)
+        var req = URLRequest(url: URL(string: url)!)
         req.httpMethod = method
         headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        if let body = body {
-            req.httpBody = try JSONSerialization.data(withJSONObject: body)
-            if req.value(forHTTPHeaderField: "Content-Type") == nil {
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            }
-        }
+        if let body = body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
 
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse else {
             throw NetworkError(code: "UNKNOWN", retryable: false)
         }
-
-        // Señal de dominio: 401 con header específico → error tipado, no 4xx genérico.
-        if http.statusCode == 401,
-           http.value(forHTTPHeaderField: "X-Session-Expired") == "true" {
+        if http.statusCode == 401, http.value(forHTTPHeaderField: "X-Session-Expired") == "true" {
             throw NetworkError(code: "SESSION_EXPIRED", retryable: false, httpStatus: 401)
         }
-
         let headers = (http.allHeaderFields as? [String: String]) ?? [:]
-        return NetworkResponse(
-            statusCode: http.statusCode,
-            headers: headers,
-            data: http.statusCode == 204 ? nil : data
-        )
+        return NetworkResponse(statusCode: http.statusCode, headers: headers,
+                               data: http.statusCode == 204 ? nil : data)
     }
 
-    func cancel(requestId: String) {
-        // Opcional. Buscar el URLSessionTask asociado al requestId y `.cancel()` sobre él.
-    }
+    func cancel(requestId: String) { /* buscar el URLSessionTask y .cancel() */ }
 }
 ```
 
----
-
-## Registrando antes de iniciar RN
+## Registrar antes de iniciar RN
 
 ```swift
-// AppDelegate.application(_:didFinishLaunchingWithOptions:)
-import NetworkContracts
-
-RNNetworkRegistry.provider = AppNetworkProvider()
+import iOSNetworkContract
 
 RNNetworkRegistry.appConfig = AppConfig(
-    country: "CL",
-    environment: "prod",
+    country: "CL", environment: "prod",
     domains: [DomainConfig(key: "BFF", baseURL: "https://api.bank.cl")]
 )
 RNNetworkRegistry.activeDomain = "BFF"
+RNNetworkRegistry.provider = AppNetworkProvider()        // si nil → RN cae al mock JS
+RNNetworkRegistry.onSessionExpired = { /* notificar al JS */ }
 
-RNNetworkRegistry.onSessionExpired = { [weak self] in
-    // Lo que el host quiera hacer cuando detecta sesión vencida.
-    // El módulo RN forwardea esto al JS como evento `sessionExpired`.
-    self?.notifyJSSessionExpired()
-}
-
-ReactNativeHostManager.shared.initialize()
+ReactNativeHostManager.shared.initialize()               // SIEMPRE al final
 ```
-
-> El orden importa: `provider` y `appConfig` deben estar seteados **antes** de que el runtime de RN levante. Si `provider` queda `nil`, el módulo RN cae al `MockNetworkProvider` JS — útil para builds con backend stubbed.
-
----
-
-## Versionado
-
-| Aspecto | Detalle |
-|---|---|
-| Manifestos | `Package.swift` + `NetworkContracts.podspec` apuntando al mismo `Sources/` |
-| Resolución | Git tag (SPM lee el tag directo; el podspec usa `:tag => s.version.to_s`) |
-| Sincronización con Android | Mismo `MAJOR.MINOR` siempre. Patches pueden divergir si son fixes específicos de iOS |
-| Cambios al contrato | Requieren PR simultáneo en [`rn-network-contracts-android`](https://bitbucket.scotiabank.com/projects/<PROJECT>/repos/rn-network-contracts-android) con el mismo bump |
-
-Ver [CHANGELOG.md](./CHANGELOG.md) para el historial.
 
 ---
 
 ## Desarrollo
 
 ```bash
-swift build              # compila la librería
-swift test               # corre los tests
-pod lib lint NetworkContracts.podspec --allow-warnings   # valida el podspec
+swift build                          # compila la librería (source)
+swift test                           # tests
+./scripts/build-xcframework.sh       # genera el xcframework
+./scripts/build-and-sync.sh          # build + sync al módulo Expo (dev local)
 ```
 
-Los tres tienen que pasar localmente antes de abrir un PR. El Jenkinsfile en el repo corre exactamente lo mismo.
+## Release (Fastlane + Jenkins)
 
-## Estructura
+```bash
+fastlane test                        # swift build + test
+fastlane build_xcframework           # genera el binario sin publicar
+fastlane release bump:minor          # bump tag + build + upload + DISTRIBUTION.md
+```
+
+El pipeline (manual desde Jenkins) versiona por **git tag**, genera el xcframework con `build-xcframework.sh`, lo sube a Artifactory, y escribe `DISTRIBUTION.md` con la URL + checksum.
+
+> NO se usa `fastlane-plugin-create_xcframework` — falla con Swift Packages puros (bitcode deprecado + framework sin `Modules/swiftinterface`). El script maneja los gotchas de SwiftPM.
+
+## Estructura (repo iOS-only en el banco)
 
 ```
-.
+rn-network-contracts-ios/
+├── Package.swift                     ← source, para build script + tests
+├── scripts/
+│   ├── build-xcframework.sh
+│   └── build-and-sync.sh
+├── Sources/iOSNetworkContract/       ← sin prefijo ios/ (repo iOS-only)
+├── Tests/iOSNetworkContractTests/
+├── fastlane/Fastfile
 ├── Jenkinsfile
-├── NetworkContracts.podspec
-├── Package.swift
-├── README.md
-├── CHANGELOG.md
-├── Sources/
-│   └── NetworkContracts/
-│       ├── AppConfig.swift
-│       ├── NetworkError.swift
-│       ├── NetworkProvider.swift
-│       ├── NetworkResponse.swift
-│       └── RNNetworkRegistry.swift
-└── Tests/
-    └── NetworkContractsTests/
-        └── NetworkContractsTests.swift
+└── Gemfile
 ```
+
+> En el prototipo combinado (iOS+Android) los Sources viven en `ios/Sources/...`. Al separar en el repo iOS-only del banco, suben a la raíz (`Sources/...`) y se quita el prefijo `ios/` de los `path:` del `Package.swift`.
+
+## Versionado
+
+- **Versión = git tag.** No hay podspec que bumpear.
+- La app nativa y el módulo Expo deben usar la **misma versión** del xcframework (sino `Symbol not found` en runtime).
+- iOS ↔ Android van al mismo `MAJOR.MINOR`.

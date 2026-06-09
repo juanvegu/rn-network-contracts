@@ -1,23 +1,23 @@
 #!/bin/bash
 #
-# Genera NetworkContracts.xcframework (iOS device + simulator) desde el Swift Package.
+# Genera iOSNetworkContract.xcframework (iOS device + simulator) desde el Swift Package.
 #
 # Maneja el gotcha de SwiftPM → XCFramework: el `xcodebuild archive` de un
 # Swift Package deja el .framework en usr/local/lib SIN el directorio Modules/
 # (swiftmodule + swiftinterface). Este script los copia manualmente para que
-# los consumidores puedan hacer `import NetworkContracts`.
+# los consumidores puedan hacer `import iOSNetworkContract`.
 #
 # Uso:
 #   ./scripts/build-xcframework.sh
 #
 # Output:
-#   build/NetworkContracts.xcframework        — el framework binario
-#   build/NetworkContracts.xcframework.zip    — comprimido para distribuir
+#   build/iOSNetworkContract.xcframework        — el framework binario
+#   build/iOSNetworkContract.xcframework.zip    — comprimido para distribuir
 #   build/checksum.txt                        — sha256 para Package.swift (.binaryTarget)
 #
 set -euo pipefail
 
-SCHEME="NetworkContracts"
+SCHEME="iOSNetworkContract"
 BUILD_DIR="build"
 OUTPUT="${BUILD_DIR}/${SCHEME}.xcframework"
 ZIP="${BUILD_DIR}/${SCHEME}.xcframework.zip"
@@ -69,7 +69,7 @@ archive_platform() {
   echo "    framework:   ${framework}"
   echo "    swiftmodule: ${swiftmodule}"
 
-  # Inyectar Modules/NetworkContracts.swiftmodule/ dentro del framework.
+  # Inyectar Modules/iOSNetworkContract.swiftmodule/ dentro del framework.
   mkdir -p "${framework}/Modules/${SCHEME}.swiftmodule"
   cp -R "${swiftmodule}/." "${framework}/Modules/${SCHEME}.swiftmodule/"
 

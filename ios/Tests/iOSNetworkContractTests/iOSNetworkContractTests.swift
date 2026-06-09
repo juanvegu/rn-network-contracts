@@ -1,7 +1,7 @@
 import XCTest
-@testable import NetworkContracts
+@testable import iOSNetworkContract
 
-final class NetworkContractsTests: XCTestCase {
+final class iOSNetworkContractTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
